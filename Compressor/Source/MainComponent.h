@@ -19,13 +19,20 @@ public:
     void paint (juce::Graphics& g) override;
     void resized() override;
 
+    void bypassButtonPressed();
+
 private:
+    juce::TextButton bypassButton{ "bypass" };
 
     juce::Slider thresholdSlider;
     juce::Slider gainSlider;
 
     juce::Label thresholdLabel;
     juce::Label gainLabel;
+
+    bool Bypass{ true };
+    int mBufferSize{ 0 };
+    double mSampleRate{ 0.0 };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainComponent)
 };
