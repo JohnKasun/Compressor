@@ -2,11 +2,7 @@
 
 #include <JuceHeader.h>
 
-//==============================================================================
-/*
-    This component lives inside our window, and this is where you should put all
-    your controls and content.
-*/
+
 class MainComponent  : public juce::AudioAppComponent
 {
 public:
@@ -24,9 +20,12 @@ public:
     void resized() override;
 
 private:
-    //==============================================================================
-    // Your private member variables go here...
 
+    juce::Slider thresholdSlider;
+    juce::Slider gainSlider;
+
+    juce::Label thresholdLabel;
+    juce::Label gainLabel;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainComponent)
 };
