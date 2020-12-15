@@ -8,6 +8,7 @@
 
 #include <JuceHeader.h>
 #include "MainComponent.h"
+#include "DecibelSlider.h"
 
 //==============================================================================
 class CompressorApplication  : public juce::JUCEApplication

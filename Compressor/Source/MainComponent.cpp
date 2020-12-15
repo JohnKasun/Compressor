@@ -23,7 +23,14 @@ MainComponent::MainComponent()
     bypassButton.onClick = [this] { bypassButtonPressed(); };
 
     addAndMakeVisible(thresholdSlider);
+    thresholdSlider.setValue(threshold);
+    thresholdSlider.setRange(-40.0, 0.0);
+    thresholdSlider.onValueChange = [this] { threshold = (float)thresholdSlider.getValue(); };
+
     addAndMakeVisible(gainSlider);
+    gainSlider.setValue(juce::Decibels::gainToDecibels(gain));
+    gainSlider.setRange(-10.0, 10.0);
+    gainSlider.onValueChange = [this] { gain = juce::Decibels::decibelsToGain((float)gainSlider.getValue()); };
 
     addAndMakeVisible(thresholdLabel);
     thresholdLabel.attachToComponent(&thresholdSlider, false);
@@ -48,51 +55,69 @@ void MainComponent::prepareToPlay (int samplesPerBlockExpected, double sampleRat
     mSampleRate = sampleRate;
 }
 
-void MainComponent::getNextAudioBlock (const juce::AudioSourceChannelInfo& bufferToFill)
+void MainComponent::getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToFill)
 {
-    if (!Bypass)
+
+    auto currentGain = gain;
+    auto currentThreshold = threshold;
+
+    auto* device = deviceManager.getCurrentAudioDevice();
+    auto activeInputChannels = device->getActiveInputChannels();
+    auto activeOutputChannels = device->getActiveOutputChannels();
+
+    auto maxInputChannels = activeInputChannels.getHighestBit() + 1;
+    auto maxOutputChannels = activeInputChannels.getHighestBit() + 1;
+
+    for (auto channel = 0; channel < maxOutputChannels; channel++)
     {
-        auto* device = deviceManager.getCurrentAudioDevice();
-        auto activeInputChannels = device->getActiveInputChannels();
-        auto activeOutputChannels = device->getActiveOutputChannels();
-
-        auto maxInputChannels = activeInputChannels.getHighestBit() + 1;
-        auto maxOutputChannels = activeInputChannels.getHighestBit() + 1;
-
-        auto threshold = (float)thresholdSlider.getValue();
-        auto gain = (float)gainSlider.getValue();
-
-        for (auto channel = 0; channel < maxOutputChannels; channel++)
+        if ((!activeOutputChannels[channel]) || maxInputChannels == 0)
         {
-            if ((!activeOutputChannels[channel]) || maxInputChannels == 0)
+            bufferToFill.buffer->clear(channel, bufferToFill.startSample, bufferToFill.numSamples);
+        }
+        else
+        {
+            auto actualInputChannel = channel % maxInputChannels;
+
+            if (!activeInputChannels[channel])
             {
                 bufferToFill.buffer->clear(channel, bufferToFill.startSample, bufferToFill.numSamples);
             }
             else
             {
-                auto actualInputChannel = channel % maxInputChannels;
+                auto* inBuffer = bufferToFill.buffer->getReadPointer(actualInputChannel, bufferToFill.startSample);
+                auto* outBuffer = bufferToFill.buffer->getWritePointer(channel, bufferToFill.startSample);
 
-                if (!activeInputChannels[channel])
+                if (!Bypass)
                 {
-                    bufferToFill.buffer->clear(channel, bufferToFill.startSample, bufferToFill.numSamples);
+                    for (auto sample = 0; sample < bufferToFill.numSamples; sample++)
+                    {
+                        auto currentSamp = inBuffer[sample];
+                        auto sampLevel = juce::Decibels::gainToDecibels(std::abs(currentSamp));
+                        if (sampLevel > currentThreshold)
+                        {
+                            auto sampCompDB = ((sampLevel - currentThreshold) / ratio) + currentThreshold;
+                            auto sampCompGAIN = juce::Decibels::decibelsToGain(sampCompDB);
+
+                            if (currentSamp < 0)
+                                outBuffer[sample] = -1.0 * sampCompGAIN * currentGain;
+                            else
+                                outBuffer[sample] = sampCompGAIN * currentGain;
+                        }
+                        else
+                            outBuffer[sample] = currentSamp * currentGain;
+
+                    }
                 }
                 else
                 {
-                    auto* inBuffer = bufferToFill.buffer->getReadPointer(actualInputChannel, bufferToFill.startSample);
-                    auto* outBuffer = bufferToFill.buffer->getWritePointer(channel, bufferToFill.startSample);
-
                     for (auto sample = 0; sample < bufferToFill.numSamples; sample++)
-                    {
-                        outBuffer[sample] = inBuffer[sample] * gain;
-                    }
+                        outBuffer[sample] = inBuffer[sample];
                 }
+
             }
 
         }
     }
-    else
-        bufferToFill.buffer->clear();
- 
 }
 
 void MainComponent::releaseResources()
@@ -121,3 +146,6 @@ void MainComponent::bypassButtonPressed()
 {
     Bypass = !Bypass;
 }
+
+
+
